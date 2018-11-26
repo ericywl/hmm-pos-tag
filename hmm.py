@@ -5,6 +5,7 @@ from collections import deque
 from operator import itemgetter
 import os
 
+
 class HMM:
     """HMM class"""
     UNKNOWN_TOKEN = "UNK"
@@ -13,48 +14,49 @@ class HMM:
         """
         Given states should have START and STOP (or equivalent)
         as the first two element
-        
+
         Variables:
         end_states -- array of START and STOP states (or equivalent)
         states -- array that stores the rest of the states
-        emission_probabilities -- dictionary of state:emission_probs
-        transition_probabilities -- dictionary of state:transition_probs
+        emission_probs -- dictionary of state:emission_probabilities
+        transition_probs -- dictionary of state:transition_probabilities
         training_words -- set of words that have occured in training set
         """
         self.end_states = states[0:2]
         self.states = states[2:]
-        self.emission_probabilities = {}
-        self.transition_probabilities = {}
+        self.emission_probs = {}
+        self.transition_probs = {}
         self.training_words = set()
-        
+
     def train(self, filename):
         """
         Train the model using supervised learning on the given
         training set file
-        
+
         Arguments:
         filename -- name of the training set file
         """
         observations = self.process_file(filename, data_type="train")
-        self.emission_probabilities = self.estimate_emission(observations)
-        self.transition_probabilities = self.estimate_transition(observations)
-        
+        self.emission_probs = self.estimate_emission(observations)
+        self.transition_probs = self.estimate_transition(observations)
+
+    # TODO: Add in Viterbi, currently only predict naively
     def predict(self, in_filename, out_filename=None):
         """
         Predict the word tags using decoding on the given
         testing set file
-        
+
         Arguments:
         in_filename -- name of the testing set file 
         out_filename -- name of predictions output file
         """
         dir_path = os.path.dirname(os.path.realpath(in_filename))
         if out_filename == None:
-            out_filename = os.path.join(dir_path, "dev.test.out") 
+            out_filename = os.path.join(dir_path, "dev.test.out")
         sequences = self.process_file(in_filename, data_type="test")
         predictions = []
         for sequence in sequences:
-            predictions.append(self.label_sequence(sequence))
+            predictions.append(self.naive_label_sequence(sequence))
         with open(out_filename, "w") as out_file:
             for pred_deque in predictions:
                 while pred_deque:
@@ -63,33 +65,33 @@ class HMM:
                         continue
                     out_file.write(f"{word} {state}\n")
                 out_file.write("\n")
-        
+
     @staticmethod
     def _calculate_emission_mle(word_count, state_count, smooth_k):
         """
         Use MLE and smoothing to calculate emission probability
-        
+
         Arguments:
         word_count -- number of emissions of word from state
         state_count -- number of occurences of state in observations
         smooth_k -- smoothing variable
-        
+
         Returns:
-        emi_prob -- emission probability of word from state
+        emission_mle -- emission probability of word from state
         """
         return float(word_count) / (state_count + smooth_k)
 
     def estimate_emission(self, observations, smooth_k=1):
         """
         Estimate the emission probabilities given observations
-        
+
         Arguments:
         observations -- training data, an array of deque with 
                         word-state tuples
         smooth_k -- smoothing variable
 
         Returns:
-        emission_mle -- a dictionary of emission probabilities
+        emission_probs -- dictionary of emission probabilities
         """
         state_emission_counts = {}
         for state in self.states:
@@ -123,22 +125,32 @@ class HMM:
             emission_probs[state][HMM.UNKNOWN_TOKEN] \
                 = HMM._calculate_emission_mle(smooth_k, state_cnt, smooth_k)
         return emission_probs
-        
+
     @staticmethod
     def _calculate_transition_mle(next_state_cnt, state_cnt):
         """
         Use MLE to calculate the transition probability
-        
+
         Arguments:
         next_state_cnt -- number of transitions from state to next_state
         state_cnt -- number of occurences of state in observations
-        
+
         Returns:
         transition_mle -- transition probability of state to next_state
         """
         return float(next_state_cnt) / state_cnt
-        
+
     def estimate_transition(self, observations):
+        """
+        Estimate the transition probabilities given observations
+
+        Arguments:
+        observations -- training data, an array of deque with 
+                        word-state tuples
+
+        Returns:
+        transition_probs -- dictionary of transition probabilities
+        """
         state_transition_counts = {self.end_states[0]: {}}
         for state in self.states:
             state_transition_counts[state] = {}
@@ -165,42 +177,43 @@ class HMM:
                 ) for next_state, next_state_cnt in transition_counts.items()
             }
         return transition_probs
-        
+
     def _argmax_emission(self, word):
         """
         Get the most likely state given a word
-        
+
         Arguments:
         word -- word from a sequence
-        
+
         Returns:
         state -- state with highest probability for word in
-                 emission_probabilities
+                 emission_probs
         """
-        if not self.emission_probabilities:
+        if not self.emission_probs:
             raise Exception("Emission probabilities is empty")
         word_emission_probs = []
-        for state, word_probs in self.emission_probabilities.items():
+        for state, word_probs in self.emission_probs.items():
             temp_word = word.lower()
             if temp_word not in self.training_words:
                 curr_prob = word_probs[HMM.UNKNOWN_TOKEN]
             else:
-                curr_prob = word_probs[temp_word] \
-                    if temp_word in word_probs else 0
+                curr_prob = word_probs.get(temp_word, 0)
             word_emission_probs.append((state, curr_prob))
         return max(word_emission_probs, key=itemgetter(1))[0]
-        
-    def label_sequence(self, sequence):
+
+    def naive_label_sequence(self, sequence):
         """
-        Attach predicted label to the given sequence
-        
+        Attach predicted label to the given sequence, with Naive-Bayes
+        assumption ie. independence of words
+
         Arguments:
-        sequence -- a deque with word-state tuples, but with empty state
-        
+        sequence -- deque with word-state tuples, but with empty states 
+                    except START and STOP
+
         Returns:
-        labelled_sequence -- a new deque with all word-states filled
+        labelled_sequence -- new deque with all word-states filled
         """
-        if not self.emission_probabilities:
+        if not self.emission_probs:
             raise Exception("Emission probabilities is empty")
         prediction = deque([("", self.end_states[0])])
         for word, state in sequence:
@@ -209,6 +222,69 @@ class HMM:
             prediction.append((word, self._argmax_emission(word)))
         prediction.append(("", self.end_states[1]))
         return prediction
+
+    def _dp_helper(self, iteration, state, sequence, viterbi_graph):
+        """
+        Dynamic programming helper function for Viterbi algorithm,
+        modifies viterbi_graph
+        
+        Arguments:
+        iteration -- current iteration
+        state -- current state
+        sequence -- deque with word-state tuples, but with empty states 
+                    except START and STOP
+        viterbi_graph -- dictionary representing incomplete Viterbi graph
+        """
+        # scaling constant to avoid arithmetic underflow if it occurs
+        scaling_constant = 1e3
+        if iteration == 0:
+            raise Exception(f"Invalid iteration: {iteration}")
+        if iteration != len(sequence) - 1 and state == self.end_states[1]:
+            # STOP encountered but we have not reached the end yet
+            # (This is intended)
+            return
+        word = sequence[iteration][0].lower()
+        word = word if word in self.training_words else HMM.UNKNOWN_TOKEN
+        if iteration == 1:
+            # Base case
+            alpha = \
+                self.transition_probs[self.end_states[0]].get(state, 0)
+            beta = self.emission_probs[state].get(word, 0)
+            viterbi_graph[iteration][state] \
+                = (self.end_states[0], alpha * beta * scaling_constant)
+            return
+        # Forward recursion
+        temp_nodes = []
+        for prev_state in self.states:
+            prev_optimal_prob = viterbi_graph[iteration - 1][prev_state][1]
+            alpha = self.transition_probs[prev_state].get(state, 0)
+            if iteration == len(sequence) - 1:
+                beta = 1
+            else:
+                beta = self.emission_probs[state].get(word, 0)
+            prod = prev_optimal_prob * alpha * beta * scaling_constant
+            temp_nodes.append((prev_state, prod))
+        viterbi_graph[iteration][state] = max(temp_nodes, key=itemgetter(1))
+
+    def viterbi(self, sequence):
+        """
+        Construct Viterbi graph using sequence and model parameters
+        
+        Arguments:
+        sequence -- deque with word-state tuples, but with empty state
+                    except START and STOP
+        
+        Returns:
+        viterbi_graph -- dictionary representing the resulting Viterbi graph
+        """
+        self._check_end_states(sequence)
+        viterbi_graph = {i: {} for i in range(1, len(sequence))}
+        for iteration in range(len(sequence)):
+            if iteration == 0:
+                continue
+            for state in self.states + [self.end_states[1]]:
+                self._dp_helper(iteration, state, sequence, viterbi_graph)
+        return viterbi_graph
 
     def process_file(self, filename, data_type):
         """
@@ -240,7 +316,7 @@ class HMM:
                 word_state_deque.append(("", self.end_states[1]))
                 data.append(word_state_deque)
             return data
-            
+
     def _check_end_states(self, ws_deque):
         """Check that end two ends of word-state deque have correct states"""
         state = ws_deque[0][1]
@@ -274,4 +350,7 @@ if __name__ == "__main__":
     ]
     hmm = HMM(EN_STATES)
     hmm.train("EN/train")
-    hmm.predict("EN/dev.in")
+    # hmm.predict("EN/dev.in")
+    data = hmm.process_file("EN/dev.in", data_type="test")
+    sample = data[0]
+    print(hmm.viterbi(sample))
