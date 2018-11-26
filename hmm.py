@@ -227,7 +227,7 @@ class HMM:
         """
         Dynamic programming helper function for Viterbi algorithm,
         modifies viterbi_graph
-        
+
         Arguments:
         iteration -- current iteration
         state -- current state
@@ -269,11 +269,11 @@ class HMM:
     def viterbi(self, sequence):
         """
         Construct Viterbi graph using sequence and model parameters
-        
+
         Arguments:
         sequence -- deque with word-state tuples, but with empty state
                     except START and STOP
-        
+
         Returns:
         viterbi_graph -- dictionary representing the resulting Viterbi graph
         """
