@@ -1,15 +1,27 @@
 #!/usr/bin/env python3
-"""Part 2 of ML Design Project"""
+"""ML Design Project"""
 
 from collections import deque
 
 class HMM:
+    """HMM class"""
 
-    def __init__(self):
+    def __init__(self, states):
+        self.states = states
         self.emission_probabilities = {}
         self.transition_probabilities = {}
 
     def calculate_emission(self, observations):
+        temp_emission = {}
+        for state in self.states:
+            temp_emission[state] = {}
+        for ws_deque in observations:
+            for word, state in ws_deque:
+                if state in ["START", "STOP"]:
+                    continue
+                if word not in temp_emission[state]:
+                    temp_emission[state][word] = 0
+                temp_emission[state][word] += 1
 
 
     @staticmethod
