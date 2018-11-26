@@ -89,11 +89,12 @@ class HMM:
                 if state in self.end_states:
                     continue
                 if state not in self.states:
-                    raise Exception("Invalid state in data")
-                self.training_words.add(word)
+                    raise Exception(f"Invalid state in data: {state}")
+                temp_word = word.lower()
+                self.training_words.add(temp_word)
                 if word not in sw_counts[state]:
-                    sw_counts[state][word] = 0
-                sw_counts[state][word] += 1
+                    sw_counts[state][temp_word] = 0
+                sw_counts[state][temp_word] += 1
         emi_probs = {}
         for state, word_counts in sw_counts.items():
             num_state = sum(word_counts.values())
@@ -122,12 +123,13 @@ class HMM:
             raise Exception("Emission probabilities is empty")
         word_emission_probs = []
         for state, word_probs in self.emission_probabilities.items():
-            if word not in self.training_words:
+            temp_word = word.lower()
+            if temp_word not in self.training_words:
                 curr_prob = word_probs[HMM.UNKNOWN_TOKEN]
             else:
-                curr_prob = word_probs[word] if word in word_probs else 0
+                curr_prob = word_probs[temp_word] \
+                    if temp_word in word_probs else 0
             word_emission_probs.append((state, curr_prob))
-        print(word, word_emission_probs)
         return max(word_emission_probs, key=itemgetter(1))[0]
         
     def label_sequence(self, sequence):
@@ -162,7 +164,6 @@ class HMM:
                 word_state_deque = deque()
                 for ws_pair in sentence.split("\n"):
                     split_ws = ws_pair.split(" ")
-                    split_ws[0] = split_ws[0].lower()
                     if data_type == "test":
                         if len(split_ws) > 1:
                             raise Exception("Wrong testing set format")
@@ -177,26 +178,23 @@ class HMM:
 
 if __name__ == "__main__":
     EN_STATES = [
-        'START',
-        'STOP',
-        'B-VP',
-        'I-VP',
-        'B-NP',
-        'I-NP',
-        'B-PP',
-        'I-PP',
-        'O',
-        'B-INTJ',
-        'I-INTJ',
-        'B-PRT',
-        'B-ADJP',
-        'I-ADJP',
-        'B-SBAR',
-        'I-SBAR',
-        'B-ADVP',
-        'I-ADVP',
-        'B-CONJP',
-        'I-CONJP'
+        "START", "STOP",
+        "B-VP", "I-VP",
+        "B-NP", "I-NP",
+        "B-PP", "I-PP",
+        "B-INTJ", "I-INTJ",
+        "B-ADJP", "I-ADJP",
+        "B-SBAR", "I-SBAR",
+        "B-ADVP", "I-ADVP",
+        "B-CONJP", "I-CONJP",
+        "O", "B-PRT"
+    ]
+    OTHER_STATES = [
+        "START", "STOP",
+        "B-positive", "I-positive",
+        "B-neutral", "I-neutral",
+        "B-negative", "I-negative",
+        "O"
     ]
     hmm = HMM(EN_STATES)
     hmm.train("EN/train")
