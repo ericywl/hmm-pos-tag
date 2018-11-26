@@ -1,4 +1,4 @@
-# ML Design Project
+# ML Project
 
 Implement Hidden Markov Model.
 
