@@ -1,3 +1,5 @@
 # ML Design Project
 
-Implement HMM
+Implement Hidden Markov Model.
+
+The training and testing data are given in `EN`, `CN`, `FR` and `SG`.

@@ -6,10 +6,10 @@ from collections import deque
 class HMM:
     """HMM class"""
 
-    def __init__(self, states):
+    def __init__(self, states, emi_probs={}, trans_probs={}):
         self.states = states
-        self.emission_probabilities = {}
-        self.transition_probabilities = {}
+        self.emission_probabilities = emi_probs
+        self.transition_probabilities = trans_probs
         
     def train(self, filename):
         """
