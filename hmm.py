@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """ML Design Project"""
 
+import os
+import subprocess
 from collections import deque
 from operator import itemgetter
-import os
 
 
 class HMM:
@@ -375,7 +376,7 @@ class HMM:
         return True
 
 
-def main():
+def train_and_test():
     """Main function"""
     en_states = [
         "START", "STOP",
@@ -399,11 +400,21 @@ def main():
     data_folders = ["EN", "SG", "CN", "FR"]
     for folder in data_folders:
         print(f"Training and testing for {folder}...")
+        print("=============================================")
         states = en_states if folder == "EN" else other_states
         hmm = HMM(states)
-        hmm.train(os.path.join(folder, "train"))
-        hmm.predict(os.path.join(folder, "dev.in"))
+        train_file = os.path.join(folder, "train")
+        test_file = os.path.join(folder, "dev.in")
+        gold_file = os.path.join(folder, "dev.out")
+        output_file = os.path.join(folder, "dev.test.out")
+        # Train and predict
+        hmm.train(train_file)
+        hmm.predict(test_file, decoding_type="viterbi")
+        # Evalute result
+        cmd = f"python eval_result.py {gold_file} {output_file}"
+        subprocess.run(cmd, shell=True, check=True)
+        print("\n")
 
 
 if __name__ == "__main__":
-    main()
+    train_and_test()
