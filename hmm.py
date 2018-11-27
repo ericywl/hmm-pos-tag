@@ -47,11 +47,11 @@ class HMM:
         testing set file
 
         Arguments:
-        in_filename -- name of the testing set file 
+        in_filename -- name of the testing set file
         out_filename -- name of predictions output file
         """
         dir_path = os.path.dirname(os.path.realpath(in_filename))
-        if out_filename == None:
+        if not out_filename:
             out_filename = os.path.join(dir_path, "dev.test.out")
         sequences = self.process_file(in_filename, data_type="test")
         predictions = []
@@ -86,7 +86,7 @@ class HMM:
         Estimate the emission probabilities given observations
 
         Arguments:
-        observations -- training data, an array of deque with 
+        observations -- training data, an array of deque with
                         word-state tuples
         smooth_k -- smoothing variable
 
@@ -145,7 +145,7 @@ class HMM:
         Estimate the transition probabilities given observations
 
         Arguments:
-        observations -- training data, an array of deque with 
+        observations -- training data, an array of deque with
                         word-state tuples
 
         Returns:
@@ -156,10 +156,10 @@ class HMM:
             state_transition_counts[state] = {}
         for ws_deque in observations:
             self._check_end_states(ws_deque)
-            for i in range(len(ws_deque)):
+            for i, ws_pair in enumerate(ws_deque):
                 if i == len(ws_deque) - 1:
                     continue
-                curr_state = ws_deque[i][1]
+                curr_state = ws_pair[1]
                 next_state = ws_deque[i + 1][1]
                 if next_state not in state_transition_counts[curr_state]:
                     state_transition_counts[curr_state][next_state] = 0
@@ -207,7 +207,7 @@ class HMM:
         assumption ie. independence of words
 
         Arguments:
-        sequence -- deque with word-state tuples, but with empty states 
+        sequence -- deque with word-state tuples, but with empty states
                     except START and STOP
 
         Returns:
@@ -231,7 +231,7 @@ class HMM:
         Arguments:
         iteration -- current iteration
         state -- current state
-        sequence -- deque with word-state tuples, but with empty states 
+        sequence -- deque with word-state tuples, but with empty states
                     except START and STOP
         viterbi_graph -- dictionary representing incomplete Viterbi graph
         """
@@ -328,6 +328,16 @@ class HMM:
         return True
 
 
+def main(states):
+    """Main function"""
+    hmm = HMM(states)
+    hmm.train("EN/train")
+    # hmm.predict("EN/dev.in")
+    data = hmm.process_file("EN/dev.in", data_type="test")
+    sample = data[0]
+    print(hmm.viterbi(sample))
+
+
 if __name__ == "__main__":
     EN_STATES = [
         "START", "STOP",
@@ -348,9 +358,4 @@ if __name__ == "__main__":
         "B-negative", "I-negative",
         "O"
     ]
-    hmm = HMM(EN_STATES)
-    hmm.train("EN/train")
-    # hmm.predict("EN/dev.in")
-    data = hmm.process_file("EN/dev.in", data_type="test")
-    sample = data[0]
-    print(hmm.viterbi(sample))
+    main(EN_STATES)
