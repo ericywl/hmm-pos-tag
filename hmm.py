@@ -40,23 +40,26 @@ class HMM:
         self.emission_probs = self.estimate_emission(observations)
         self.transition_probs = self.estimate_transition(observations)
 
-    # TODO: Add in Viterbi, currently only predict naively
-    def predict(self, in_filename, out_filename=None):
+    def predict(self, in_filename, out_filename=None, decoding_type="viterbi"):
         """
-        Predict the word tags using decoding on the given
-        testing set file
+        Wrapper function to predict word tags using decoding
 
         Arguments:
-        in_filename -- name of the testing set file
-        out_filename -- name of predictions output file
+        in_filename -- name of input file ie. testing set
+        out_filename -- name of output file
+        decoding_type -- either naive or Viterbi
         """
         dir_path = os.path.dirname(os.path.realpath(in_filename))
         if not out_filename:
             out_filename = os.path.join(dir_path, "dev.test.out")
         sequences = self.process_file(in_filename, data_type="test")
-        predictions = []
-        for sequence in sequences:
-            predictions.append(self.naive_label_sequence(sequence))
+        if decoding_type.lower() == "viterbi":
+            predictions = self.viterbi_predict(sequences)
+        elif decoding_type.lower() == "naive":
+            predictions = self.naive_predict(sequences)
+        else:
+            raise Exception("Wrong decoding type")
+        # Write result to output file
         with open(out_filename, "w") as out_file:
             for pred_deque in predictions:
                 while pred_deque:
@@ -65,6 +68,41 @@ class HMM:
                         continue
                     out_file.write(f"{word} {state}\n")
                 out_file.write("\n")
+
+    def viterbi_predict(self, sequences):
+        """
+        Predict the word tags using decoding with Viterbi on the
+        given sequences
+
+        Arguments:
+        sequences -- array of deque with word-state pairs, but the states
+                     are empty except for START and STOP
+        """
+        predictions = []
+        for sequence in sequences:
+            viterbi_graph = self.viterbi(sequence)
+            labelled_sequence = deque([("", self.end_states[1])])
+            for i in range(len(sequence) - 2, -1, -1):
+                word, _ = sequence[i]
+                child_state = labelled_sequence[0][1]
+                optimal_node = viterbi_graph[i + 1][child_state]
+                optimal_state = optimal_node[0]
+                labelled_sequence.appendleft((word, optimal_state))
+            predictions.append(labelled_sequence)
+        return predictions
+
+    def naive_predict(self, sequences):
+        """
+        Predict the word tags using naive decoding on the given sequences
+
+        Arguments:
+        sequences -- array of deque with word-state pairs, but the states
+                     are empty except for START and STOP
+        """
+        predictions = []
+        for sequence in sequences:
+            predictions.append(self.naive_label_sequence(sequence))
+        return predictions
 
     @staticmethod
     def _calculate_emission_mle(word_count, state_count, smooth_k):
@@ -97,8 +135,8 @@ class HMM:
         for state in self.states:
             state_emission_counts[state] = {}
         for ws_deque in observations:
+            self._check_end_states(ws_deque)
             for word, state in ws_deque:
-                self._check_end_states(ws_deque)
                 if state in self.end_states:
                     continue
                 if state not in self.states:
@@ -223,7 +261,8 @@ class HMM:
         prediction.append(("", self.end_states[1]))
         return prediction
 
-    def _dp_helper(self, iteration, state, sequence, viterbi_graph):
+    def _dp_helper(self, iteration, state, sequence, viterbi_graph,
+                   scaling_constant):
         """
         Dynamic programming helper function for Viterbi algorithm,
         modifies viterbi_graph
@@ -234,24 +273,26 @@ class HMM:
         sequence -- deque with word-state tuples, but with empty states
                     except START and STOP
         viterbi_graph -- dictionary representing incomplete Viterbi graph
+        scaling_constant -- scaling constant to avoid potential
+                            arithmetic underflow
         """
-        # scaling constant to avoid arithmetic underflow if it occurs
-        scaling_constant = 1e3
-        if iteration == 0:
+        if iteration < 1 or iteration > len(sequence):
             raise Exception(f"Invalid iteration: {iteration}")
-        if iteration != len(sequence) - 1 and state == self.end_states[1]:
-            # STOP encountered but we have not reached the end yet
-            # (This is intended)
-            return
-        word = sequence[iteration][0].lower()
+        if state not in self.states + [self.end_states[1]]:
+            raise Exception(f"Invalid state: {state}")
+        if iteration < len(sequence):
+            word = sequence[iteration][0].lower()
+        else:
+            word = None
+        # Replace unseen words with UNK
         word = word if word in self.training_words else HMM.UNKNOWN_TOKEN
         if iteration == 1:
             # Base case
-            alpha = \
-                self.transition_probs[self.end_states[0]].get(state, 0)
+            alpha = self.transition_probs[self.end_states[0]].get(
+                state, 0)
             beta = self.emission_probs[state].get(word, 0)
-            viterbi_graph[iteration][state] \
-                = (self.end_states[0], alpha * beta * scaling_constant)
+            viterbi_graph[iteration][state] = (
+                self.end_states[0], alpha * beta * scaling_constant)
             return
         # Forward recursion
         temp_nodes = []
@@ -259,6 +300,7 @@ class HMM:
             prev_optimal_prob = viterbi_graph[iteration - 1][prev_state][1]
             alpha = self.transition_probs[prev_state].get(state, 0)
             if iteration == len(sequence) - 1:
+                # Final case
                 beta = 1
             else:
                 beta = self.emission_probs[state].get(word, 0)
@@ -266,7 +308,7 @@ class HMM:
             temp_nodes.append((prev_state, prod))
         viterbi_graph[iteration][state] = max(temp_nodes, key=itemgetter(1))
 
-    def viterbi(self, sequence):
+    def viterbi(self, sequence, scaling_constant=1e2):
         """
         Construct Viterbi graph using sequence and model parameters
 
@@ -279,11 +321,14 @@ class HMM:
         """
         self._check_end_states(sequence)
         viterbi_graph = {i: {} for i in range(1, len(sequence))}
-        for iteration in range(len(sequence)):
-            if iteration == 0:
+        for iteration in range(1, len(sequence)):
+            if iteration == len(sequence) - 1:
+                self._dp_helper(iteration, self.end_states[1], sequence,
+                                viterbi_graph, scaling_constant)
                 continue
-            for state in self.states + [self.end_states[1]]:
-                self._dp_helper(iteration, state, sequence, viterbi_graph)
+            for state in self.states:
+                self._dp_helper(iteration, state, sequence, viterbi_graph,
+                                scaling_constant)
         return viterbi_graph
 
     def process_file(self, filename, data_type):
@@ -306,8 +351,10 @@ class HMM:
             for sentence in sentences:
                 word_state_deque = deque()
                 for ws_pair in sentence.split("\n"):
-                    split_ws = ws_pair.split(" ")
-                    if data_type == "test":
+                    if data_type.lower() == "train":
+                        split_ws = ws_pair.rsplit(" ", 1)
+                    else:
+                        split_ws = [ws_pair.rstrip()]
                         if len(split_ws) > 1:
                             raise Exception("Wrong testing set format")
                         split_ws.append("")
@@ -328,18 +375,9 @@ class HMM:
         return True
 
 
-def main(states):
+def main():
     """Main function"""
-    hmm = HMM(states)
-    hmm.train("EN/train")
-    # hmm.predict("EN/dev.in")
-    data = hmm.process_file("EN/dev.in", data_type="test")
-    sample = data[0]
-    print(hmm.viterbi(sample))
-
-
-if __name__ == "__main__":
-    EN_STATES = [
+    en_states = [
         "START", "STOP",
         "B-VP", "I-VP",
         "B-NP", "I-NP",
@@ -351,11 +389,21 @@ if __name__ == "__main__":
         "B-CONJP", "I-CONJP",
         "O", "B-PRT"
     ]
-    OTHER_STATES = [
+    other_states = [
         "START", "STOP",
         "B-positive", "I-positive",
         "B-neutral", "I-neutral",
         "B-negative", "I-negative",
         "O"
     ]
-    main(EN_STATES)
+    data_folders = ["EN", "SG", "CN", "FR"]
+    for folder in data_folders:
+        print(f"Training and testing for {folder}...")
+        states = en_states if folder == "EN" else other_states
+        hmm = HMM(states)
+        hmm.train(os.path.join(folder, "train"))
+        hmm.predict(os.path.join(folder, "dev.in"))
+
+
+if __name__ == "__main__":
+    main()

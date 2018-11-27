@@ -1,2 +1,6 @@
-dev.test.out
+# Editor related
 .mypy_cache/
+.vscode/
+
+# Output files
+dev.test.out
