@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""ML Design Project"""
+"""First order Hidden Markov Model"""
 
 import os
 import subprocess
+import copy
 from collections import deque
 from operator import itemgetter
 
 
 class HMM:
-    """HMM class"""
-    UNKNOWN_TOKEN = "UNK"
+    """First order HMM class"""
+    UNKNOWN_TOKEN = "#UNK#"
+    SUFFIX_TOKEN = "#SUF#"
+    SUFFIX_LEN = 4
 
     def __init__(self, states):
         """
@@ -19,15 +22,16 @@ class HMM:
         Variables:
         end_states -- array of START and STOP states (or equivalent)
         states -- array that stores the rest of the states
-        emission_probs -- dictionary of state:emission_probabilities
-        transition_probs -- dictionary of state:transition_probabilities
+        emission_probs -- dictionary of state:state:probability
+        transition_probs -- dictionary of state:word:probability
         training_words -- set of words that have occured in training set
         """
         self.end_states = states[0:2]
         self.states = states[2:]
         self.emission_probs = {}
+        self._transition_cnts = {}
         self.transition_probs = {}
-        self.training_words = set()
+        self.training_words = {}
 
     def train(self, filename):
         """
@@ -105,8 +109,7 @@ class HMM:
             predictions.append(self.naive_label_sequence(sequence))
         return predictions
 
-    @staticmethod
-    def _calculate_emission_mle(word_count, state_count, smooth_k):
+    def _calculate_emission_mle(self, word_count, state_count, smooth_k):
         """
         Use MLE and smoothing to calculate emission probability
 
@@ -118,7 +121,7 @@ class HMM:
         Returns:
         emission_mle -- emission probability of word from state
         """
-        return float(word_count) / (state_count + smooth_k)
+        return float(word_count + smooth_k) / (state_count + smooth_k * len(self.states))
 
     def estimate_emission(self, observations, smooth_k=1):
         """
@@ -132,9 +135,9 @@ class HMM:
         Returns:
         emission_probs -- dictionary of emission probabilities
         """
-        state_emission_counts = {}
+        state_emission_cnts = {}
         for state in self.states:
-            state_emission_counts[state] = {}
+            state_emission_cnts[state] = {}
         for ws_deque in observations:
             self._check_end_states(ws_deque)
             for word, state in ws_deque:
@@ -142,28 +145,39 @@ class HMM:
                     continue
                 if state not in self.states:
                     raise Exception(f"Invalid state in data: {state}")
-                temp_word = word.lower()
                 # Add word to training_words for use in smoothing
-                self.training_words.add(temp_word)
-                if word not in state_emission_counts[state]:
-                    state_emission_counts[state][temp_word] = 0
-                state_emission_counts[state][temp_word] += 1
+                if word not in self.training_words:
+                    self.training_words[word] = 0
+                self.training_words[word] += 1
+                if word not in state_emission_cnts[state]:
+                    state_emission_cnts[state][word] = 0
+                state_emission_cnts[state][word] += 1
         emission_probs = {}
-        for state, emission_counts in state_emission_counts.items():
+        for state, emission_counts in state_emission_cnts.items():
             # Sum all emission counts of a particular state
             state_cnt = sum(emission_counts.values())
             if state not in emission_probs:
                 emission_probs[state] = {}
             # Calculate emission MLE for each state
             emission_probs[state] = {
-                word: HMM._calculate_emission_mle(
+                word: self._calculate_emission_mle(
                     word_cnt, state_cnt, smooth_k
                 ) for word, word_cnt in emission_counts.items()
             }
             # Introduce UNK word token with smoothing
             emission_probs[state][HMM.UNKNOWN_TOKEN] \
-                = HMM._calculate_emission_mle(smooth_k, state_cnt, smooth_k)
+                = self._calculate_emission_mle(smooth_k, state_cnt, smooth_k)
         return emission_probs
+
+    def get_emission_probability(self, state, word):
+        """Helper function to get emission probability given state and word"""
+        if word[:len(HMM.SUFFIX_TOKEN)] == HMM.SUFFIX_TOKEN:
+            prob = 0
+            for word2 in self.emission_probs[state]:
+                if word2[-HMM.SUFFIX_LEN:] == word[-HMM.SUFFIX_LEN:]:
+                    prob += self.emission_probs[state][word2]
+            return prob
+        return self.emission_probs[state].get(word, 0)
 
     @staticmethod
     def _calculate_transition_mle(next_state_cnt, state_cnt):
@@ -190,9 +204,9 @@ class HMM:
         Returns:
         transition_probs -- dictionary of transition probabilities
         """
-        state_transition_counts = {self.end_states[0]: {}}
+        state_transition_cnts = {self.end_states[0]: {}}
         for state in self.states:
-            state_transition_counts[state] = {}
+            state_transition_cnts[state] = {}
         for ws_deque in observations:
             self._check_end_states(ws_deque)
             for i, ws_pair in enumerate(ws_deque):
@@ -200,15 +214,14 @@ class HMM:
                     continue
                 curr_state = ws_pair[1]
                 next_state = ws_deque[i + 1][1]
-                if next_state not in state_transition_counts[curr_state]:
-                    state_transition_counts[curr_state][next_state] = 0
-                state_transition_counts[curr_state][next_state] += 1
-        transition_probs = {}
-        for curr_state, transition_counts in state_transition_counts.items():
+                if next_state not in state_transition_cnts[curr_state]:
+                    state_transition_cnts[curr_state][next_state] = 0
+                state_transition_cnts[curr_state][next_state] += 1
+        self._transition_cnts = state_transition_cnts
+        transition_probs = copy.deepcopy(state_transition_cnts)
+        for curr_state, transition_counts in state_transition_cnts.items():
             # Sum all transition counts of a particular state
             state_cnt = sum(transition_counts.values())
-            if curr_state not in transition_probs:
-                transition_probs[curr_state] = {}
             # Calculate transition MLE for each state
             transition_probs[curr_state] = {
                 next_state: HMM._calculate_transition_mle(
@@ -216,6 +229,10 @@ class HMM:
                 ) for next_state, next_state_cnt in transition_counts.items()
             }
         return transition_probs
+
+    def get_transition_probability(self, state1, state2):
+        """Helper function to get transition probability from state1 to state2"""
+        return self.transition_probs[state1].get(state2, 0)
 
     def _argmax_emission(self, word):
         """
@@ -232,11 +249,10 @@ class HMM:
             raise Exception("Emission probabilities is empty")
         word_emission_probs = []
         for state, word_probs in self.emission_probs.items():
-            temp_word = word.lower()
-            if temp_word not in self.training_words:
+            if word not in self.training_words:
                 curr_prob = word_probs[HMM.UNKNOWN_TOKEN]
             else:
-                curr_prob = word_probs.get(temp_word, 0)
+                curr_prob = word_probs.get(word, 0)
             word_emission_probs.append((state, curr_prob))
         return max(word_emission_probs, key=itemgetter(1))[0]
 
@@ -262,7 +278,7 @@ class HMM:
         prediction.append(("", self.end_states[1]))
         return prediction
 
-    def _dp_helper(self, iteration, state, sequence, viterbi_graph,
+    def _dp_helper(self, iteration, curr_state, sequence, viterbi_graph,
                    scaling_constant):
         """
         Dynamic programming helper function for Viterbi algorithm,
@@ -270,44 +286,51 @@ class HMM:
 
         Arguments:
         iteration -- current iteration
-        state -- current state
+        curr_state -- current state
         sequence -- deque with word-state tuples, but with empty states
                     except START and STOP
         viterbi_graph -- dictionary representing incomplete Viterbi graph
         scaling_constant -- scaling constant to avoid potential
                             arithmetic underflow
         """
-        if iteration < 1 or iteration > len(sequence):
+        if iteration < 1 or iteration >= len(sequence):
             raise Exception(f"Invalid iteration: {iteration}")
-        if state not in self.states + [self.end_states[1]]:
-            raise Exception(f"Invalid state: {state}")
-        if iteration < len(sequence):
-            word = sequence[iteration][0].lower()
+        if curr_state not in self.states + [self.end_states[1]]:
+            raise Exception(f"Invalid state: {curr_state}")
+        if iteration < len(sequence) - 1:
+            word = sequence[iteration][0]
         else:
             word = None
         # Replace unseen words with UNK
-        word = word if word in self.training_words else HMM.UNKNOWN_TOKEN
+        word = self._process_unknown_word(word)
         if iteration == 1:
             # Base case
-            alpha = self.transition_probs[self.end_states[0]].get(
-                state, 0)
-            beta = self.emission_probs[state].get(word, 0)
-            viterbi_graph[iteration][state] = (
+            alpha = self.get_transition_probability(
+                self.end_states[0], curr_state)
+            beta = self.get_emission_probability(curr_state, word)
+            viterbi_graph[iteration][curr_state] = (
                 self.end_states[0], alpha * beta * scaling_constant)
             return
         # Forward recursion
         temp_nodes = []
         for prev_state in self.states:
             prev_optimal_prob = viterbi_graph[iteration - 1][prev_state][1]
-            alpha = self.transition_probs[prev_state].get(state, 0)
+            alpha = self.get_transition_probability(prev_state, curr_state)
             if iteration == len(sequence) - 1:
                 # Final case
                 beta = 1
             else:
-                beta = self.emission_probs[state].get(word, 0)
+                beta = self.get_emission_probability(curr_state, word)
             prod = prev_optimal_prob * alpha * beta * scaling_constant
             temp_nodes.append((prev_state, prod))
-        viterbi_graph[iteration][state] = max(temp_nodes, key=itemgetter(1))
+        viterbi_graph[iteration][curr_state] = max(temp_nodes, key=itemgetter(1))
+
+    def _process_unknown_word(self, word):
+        if not word:
+            return word
+        if word in self.training_words:
+            return word
+        return HMM.UNKNOWN_TOKEN
 
     def viterbi(self, sequence, scaling_constant=1e2):
         """
@@ -376,8 +399,8 @@ class HMM:
         return True
 
 
-def train_and_test():
-    """Main function"""
+def main():
+    """Train and test"""
     en_states = [
         "START", "STOP",
         "B-VP", "I-VP",
@@ -417,4 +440,4 @@ def train_and_test():
 
 
 if __name__ == "__main__":
-    train_and_test()
+    main()
