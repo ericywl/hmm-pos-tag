@@ -29,7 +29,7 @@ class HMM2(HMM):
         observations = self.process_file(filename, data_type="train")
         self.emission_probs = self.estimate_emission(observations)
         self.transition_probs = self.estimate_transition(observations)
-        # self.transition_probs2 = self.estimate_transition2(observations)
+        self.transition_probs2 = self.estimate_transition2(observations)
 
     def viterbi_predict(self, sequences):
         """
@@ -56,7 +56,6 @@ class HMM2(HMM):
             labelled_sequence.appendleft((sequence[len(sequence) - 3][0],
                                           optimal_end_tup[0]))
             for i in range(len(sequence) - 4, 0, -1):
-                # Given
                 word, _ = sequence[i]
                 parent_node = viterbi_graph[i + 2][optimal_end_tup]
                 optimal_end_tup = (parent_node[0], optimal_end_tup[0])
@@ -65,80 +64,21 @@ class HMM2(HMM):
             predictions.append(labelled_sequence)
         return predictions
 
-    #Deprecated
-    def estimate_emission2(self, observations, smooth_k=1):
-        """
-        Estimate the emission probabilities given observations
 
-        Arguments:
-        observations -- training data, an array of deque with word-state
-                        tuples
-        smooth_k -- smoothing variable
-
-        Returns:
-        emission_probs -- dictionary of second-order emission probabilities
-        """
-        state_emission2_cnts = {}
-        for state1 in [self.end_states[0]] + self.states:
-            state_emission2_cnts[state1] = {
-                state2: {} for state2 in self.states
-            }
-        for ws_deque in observations:
-            self._check_end_states(ws_deque)
-            for i, ws_pair in enumerate(ws_deque):
-                if i == 0:
-                    continue
-                word, curr_state = ws_pair
-                prev_state = ws_deque[i - 1][1]
-                if curr_state in self.end_states:
-                    continue
-                for state in [prev_state, curr_state]:
-                    if state not in [self.end_states[0]] + self.states:
-                        raise Exception(f"Invalid state in data: {state}")
-                # Add word to training_words for use in smoothing
-                self.training_words.add(word)
-                if word not in state_emission2_cnts[prev_state][curr_state]:
-                    state_emission2_cnts[prev_state][curr_state][word] = 0
-                state_emission2_cnts[prev_state][curr_state][word] += 1
-        emission_probs2 = copy.deepcopy(state_emission2_cnts)
-        for prev_state, curr_state_emissions in state_emission2_cnts.items():
-            for curr_state, emission_counts in curr_state_emissions.items():
-                # Sum all emission counts of a particular bigram
-                state_cnt = sum(emission_counts.values())
-                # Calculate emission MLE for each bigram
-                emission_probs2[prev_state][curr_state] = {
-                    word: self._calculate_emission_mle(
-                        emission_cnt, state_cnt, smooth_k
-                    ) for word, emission_cnt in emission_counts.items()
-                }
-                # Introduce UNK word token with smoothing
-                emission_probs2[prev_state][curr_state][HMM.UNKNOWN_TOKEN] \
-                    = self._calculate_emission_mle(smooth_k, state_cnt, smooth_k)
-        return emission_probs2
-
-    # Deprecated
-    def get_emission2_probability(self, state1, state2, word):
-        return (self.get_transition_probability(state1, state2) *
-                self.get_emission_probability(state2, word))
-
-    # Deprecated
     @staticmethod
-    def _calculate_transition2(future_scnt, next_future_scnt, curr_next_future_scnt,
-                               total_num_scnt, next_scnt, curr_next_scnt):
+    def _calculate_transition2(n1, n2, n3, c0, c1, c2):
         """
         Uses deleted interpolation technique to estimate the transition probabilities
         as given limited data, many trigram transitions would not be observed
 
         Arguments:
-        future_scnt -- number of future_state observed
-        next_future_scnt -- number of next -> future transitions
-        curr_next_future_scnt -- number of curr -> next -> future transitions
-        total_num_scnt -- total number of state occurences
-        next_scnt -- number of next_state observed
-        curr_next_scnt -- number of curr -> next transitions
+        n1 -- number of future_state observed
+        n2 -- number of prev -> curr transitions
+        n3 -- number of past -> prev -> curr transitions
+        c0 -- total number of state occurences
+        c1 -- number of prev_state observed
+        c2 -- number of past -> prev transitions
         """
-        n1, n2, n3 = future_scnt, next_future_scnt, curr_next_future_scnt
-        c0, c1, c2 = total_num_scnt, next_scnt, curr_next_scnt
         k2 = (math.log(n2 + 1) + 1) / float((math.log(n2 + 1) + 2))
         k3 = (math.log(n3 + 1) + 1) / float((math.log(n3 + 1) + 2))
         res = (
@@ -148,7 +88,6 @@ class HMM2(HMM):
         )
         return res
 
-    # Deprecated
     def estimate_transition2(self, observations):
         """
         Estimate the second-order transition probabilities given observations
@@ -161,46 +100,42 @@ class HMM2(HMM):
         transition_probs -- dictionary of second-order transition probabilities
         """
         # Count number of state occurences for use in deleted interpolation
-        state_cnts = {}
+        state_cnts = {s: 0 for s in self.states + self.end_states}
         state_transition2_cnts = {}
-        for state1 in [self.end_states[0]] + self.states:
+        start = self.end_states[0]
+        for state1 in [start] + self.states:
             state_transition2_cnts[state1] = {}
             for state2 in self.states:
                 state_transition2_cnts[state1][state2] = {}
         for ws_deque in observations:
             self._check_end_states(ws_deque)
             for i, ws_pair in enumerate(ws_deque):
-                if i >= len(ws_deque) - 2:
+                if i < 2:
                     continue
                 curr_state = ws_pair[1]
-                next_state = ws_deque[i + 1][1]
-                future_state = ws_deque[i + 2][1]
-                if future_state not in state_transition2_cnts[curr_state][next_state]:
-                    state_transition2_cnts[curr_state][next_state][future_state] = 0
-                state_transition2_cnts[curr_state][next_state][future_state] += 1
+                prev_state = ws_deque[i - 1][1]
+                past_state = ws_deque[i - 2][1]
+                if curr_state not in state_transition2_cnts[past_state][prev_state]:
+                    state_transition2_cnts[past_state][prev_state][curr_state] = 0
+                state_transition2_cnts[past_state][prev_state][curr_state] += 1
                 # State occurence counts
-                if curr_state not in state_cnts:
-                    state_cnts[curr_state] = 0
                 state_cnts[curr_state] += 1
-                if i == len(ws_deque) - 3:
-                    for state in [next_state, future_state]:
-                        if state not in state_cnts:
-                            state_cnts[state] = 0
+                if i == 2:
+                    for state in [past_state, prev_state]:
                         state_cnts[state] += 1
         total_num_states = sum(state_cnts.values())
         transition_probs2 = copy.deepcopy(state_transition2_cnts)
-        for curr_state, next_state_transitions in state_transition2_cnts.items():
-            for next_state, next_future_scnts in next_state_transitions.items():
-                # Calculate transition MLE for each trigram
-                for future_state, curr_next_future_scnt in next_future_scnts.items():
-                    next_scnt = state_cnts[next_state]
-                    future_scnt = state_cnts[future_state]
-                    curr_next_scnt = self._transition_cnts[curr_state][next_state]
-                    next_future_scnt = self._transition_cnts[next_state][future_state]
-                    transition_probs2[curr_state][next_state][future_state] = \
+        for past_state, past_state_transition in state_transition2_cnts.items():
+            for prev_state, prev_state_transition in past_state_transition.items():
+                for curr_state, past_prev_curr_tcnt in prev_state_transition.items():
+                    curr_scnt = state_cnts[curr_state]
+                    prev_scnt = state_cnts[prev_state]
+                    past_prev_tcnt = self._transition_cnts[past_state][prev_state]
+                    prev_curr_tcnt = self._transition_cnts[prev_state][curr_state]
+                    transition_probs2[past_state][prev_state][curr_state] = \
                         HMM2._calculate_transition2(
-                            future_scnt, next_future_scnt, curr_next_future_scnt,
-                            total_num_states, next_scnt, curr_next_scnt
+                            curr_scnt, prev_curr_tcnt, past_prev_curr_tcnt,
+                            total_num_states, prev_scnt, past_prev_tcnt
                         )
         return transition_probs2
 
@@ -209,9 +144,7 @@ class HMM2(HMM):
         Helper function to get transition probability from
         state1 to state2 to state3
         """
-        # return self.transition_probs2[state1][state2].get(state3, 0)
-        return (self.get_transition_probability(state1, state2)
-                * self.get_transition_probability(state2, state3))
+        return self.transition_probs2[state1][state2].get(state3, 0)
 
     def _dp_helper(self, iteration, curr_state, sequence, viterbi_graph,
                    scaling_constant):
