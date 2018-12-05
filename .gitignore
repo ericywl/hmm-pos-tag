@@ -2,5 +2,9 @@
 .mypy_cache/
 .vscode/
 
+#pycharm
+.idea/*
+
 # Output files
 dev.test.out
+
