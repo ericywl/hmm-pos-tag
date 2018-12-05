@@ -92,35 +92,19 @@ def merge(entity_file, sentiment_file, out_filename=None):
 
 
 
-FR_entity_states = ["START", "STOP",
-                       "B", "I", "O"]
+FR_entity_states = ["START", "STOP", "B", "I", "O"]
+FR_sentiment_states = ["START", "STOP", "positive", "neutral", "negative", "none"]
 
-FR_sentiment_states = ["START", "STOP",
-                          "positive",
-                          "neutral",
-                          "negative", "none"]
-EN_entity_states = [
-        "START", "STOP",
-        "B", "I", "O"]
+EN_entity_states = ["START", "STOP", "B", "I", "O"]
+EN_sentiment_states = ["START", "STOP", "VP", "NP", "PP", "INTJ", "ADJP", "SBAR", "ADVP", "CONJP", "O", "PRT", "none"]
 
-EN_sentiment_states = [   "START", "STOP",
-        "VP",
-        "NP",
-        "PP",
-        "INTJ",
-        "ADJP",
-        "SBAR",
-        "ADVP",
-        "CONJP",
-        "O", "PRT", "none"]
-
-folders = ["FR5", "EN5"]
+folders = ["FR", "EN"]
 
 for folder in folders:
     print(f"\nTraining and testing for {folder}...")
     print("=============================================")
 
-    if folder == "FR5":
+    if folder == "FR":
         entity_states = FR_entity_states
         sentiment_states = FR_sentiment_states
     else:
@@ -150,6 +134,12 @@ for folder in folders:
 
     cmd = f"python eval_result.py {gold_file} {output_file}"
     subprocess.run(cmd, shell=True, check=True)
+
+    os.remove(en_train)
+    os.remove(sn_train)
+    os.remove(en_test)
+    os.remove(sn_test)
+
 
 
 
