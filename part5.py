@@ -49,7 +49,31 @@ def split_entity(in_filename, out_filename=None):
 def split_sentiment(in_filename, out_filename=None):
     split_tag(in_filename, out_filename=out_filename, type="sentiment")
 
-def merge(entity_file, sentiment_file, out_filename=None):
+def get_most_frequent_sentiment(in_filename):
+    sentiment_frequency = {}
+    with open(in_filename, "r") as infile:
+        for inline in infile:
+            if inline == "\n":
+                continue
+
+            line = inline.strip("\n").split(" ")
+            if len(line) < 2:
+                pass
+
+            if line[1] not in list(sentiment_frequency.keys()):
+                sentiment_frequency[line[1]] = 1
+            elif line[1] == "none":
+                continue
+            else:
+                sentiment_frequency[line[1]] = sentiment_frequency.get(line[1]) + 1
+
+        most_common_state = max(sentiment_frequency, key=sentiment_frequency.get)
+        return most_common_state
+
+
+
+
+def merge(entity_file, sentiment_file, out_filename=None,most_frequent_sentiment="neutral"):
     dir_path = os.path.dirname(os.path.realpath(entity_file))
     if not out_filename:
         out_filename = os.path.join(dir_path, "dev.part55.test.out")
@@ -82,7 +106,7 @@ def merge(entity_file, sentiment_file, out_filename=None):
                         out_line.append(en_line[1])
                     else:
                         if sn_line[1] == "none":
-                            out_line.append("-".join([en_line[1], "neutral"]))
+                            out_line.append("-".join([en_line[1], most_frequent_sentiment]))
                         else:
                             out_line.append("-".join([en_line[1], sn_line[1]]))
 
@@ -130,7 +154,8 @@ for folder in folders:
     sn_hmm.train(sn_train)
     sn_hmm.predict(test_file, out_filename=sn_test)
 
-    merge(en_test, sn_test, out_filename=output_file)
+    most_frequent_sentiment = get_most_frequent_sentiment(sn_train)
+    merge(en_test, sn_test, out_filename=output_file, most_frequent_sentiment=most_frequent_sentiment)
 
     cmd = f"python eval_result.py {gold_file} {output_file}"
     subprocess.run(cmd, shell=True, check=True)
@@ -143,32 +168,34 @@ for folder in folders:
 
 
 
-#FR
-# #Entity in gold data: 238
-# #Entity in prediction: 462
-#
-# #Correct Entity : 110
-# Entity  precision: 0.2381
-# Entity  recall: 0.4622
-# Entity  F: 0.3143
-#
-# #Correct Entity Type : 47
-# Entity Type  precision: 0.1017
-# Entity Type  recall: 0.1975
-# Entity Type  F: 0.1343
+# Training and testing for FR...
+# =============================================
 
-#EN
+# #Entity in gold data: 238
+# #Entity in prediction: 454
+#
+# #Correct Entity : 107
+# Entity  precision: 0.2357
+# Entity  recall: 0.4496
+# Entity  F: 0.3092
+#
+# #Correct Entity Type : 56
+# Entity Type  precision: 0.1233
+# Entity Type  recall: 0.2353
+# Entity Type  F: 0.1618
+#
+# Training and testing for EN...
+# =============================================
+#
 # #Entity in gold data: 802
-# #Entity in prediction: 1025
+# #Entity in prediction: 1017
 #
-# #Correct Entity : 584
-# Entity  precision: 0.5698
-# Entity  recall: 0.7282
-# Entity  F: 0.6393
+# #Correct Entity : 579
+# Entity  precision: 0.5693
+# Entity  recall: 0.7219
+# Entity  F: 0.6366
 #
-# #Correct Entity Type : 473
-# Entity Type  precision: 0.4615
-# Entity Type  recall: 0.5898
-# Entity Type  F: 0.5178
-#
-# Process finished with exit code 0
+# #Correct Entity Type : 470
+# Entity Type  precision: 0.4621
+# Entity Type  recall: 0.5860
+# Entity Type  F: 0.5168

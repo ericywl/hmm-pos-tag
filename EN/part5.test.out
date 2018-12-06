@@ -6,7 +6,7 @@ Buch B-ADVP
 might B-VP
 come B-VP
 back B-ADVP
-n I-neutral
+n I-NP
 play I-VP
 vs I-NP
 Seahawks B-PRT
@@ -172,7 +172,7 @@ a B-NP
 long I-NP
 time I-NP
 ago B-ADVP
-. I-neutral
+. I-NP
 -_- I-INTJ
 skimp I-INTJ
 ass I-NP
@@ -370,7 +370,7 @@ Im B-NP
 pleased I-PRT
 . O
 
-Shower B-neutral
+Shower B-NP
 time I-NP
 the B-NP
 flyin B-PRT
@@ -419,7 +419,7 @@ could B-VP
 n't I-VP
 be I-VP
 happier I-PRT
-. I-neutral
+. I-NP
 Ending I-NP
 a B-NP
 crappy B-PP
@@ -442,7 +442,7 @@ THE B-NP
 TIME B-NP
 OH B-INTJ
 BABY( B-INTJ
-: B-neutral
+: B-NP
 
 Pope B-NP
 says B-CONJP
@@ -716,7 +716,7 @@ now I-ADVP
 at B-PP
 dentist I-NP
 , O
-and B-neutral
+and B-NP
 lady I-NP
 next I-NP
 to I-PP
@@ -1046,7 +1046,7 @@ it B-NP
 gives B-PP
 me B-NP
 days I-NP
-, I-neutral
+, I-NP
 hours I-NP
 , O
 mintues B-SBAR
@@ -1104,7 +1104,7 @@ lmao B-INTJ
 
 RT O
 @Luq_Combs B-INTJ
-: I-neutral
+: I-NP
 Funniest I-NP
 thing I-NP
 I B-NP
@@ -1328,7 +1328,7 @@ tell B-VP
 me B-NP
 when B-ADVP
 you B-NP
-do I-neutral
+do I-NP
 ! O
 
 Was B-VP
@@ -1410,7 +1410,7 @@ bruise O
 on B-PP
 my B-NP
 facee B-PRT
-... I-neutral
+... I-NP
 wild I-NP
 night I-NP
 ! O
@@ -1422,7 +1422,7 @@ https://owensoto.wordpress.com/ I-PRT
 my B-NP
 blog I-NP
 ) O
-__AND__ B-neutral
+__AND__ B-NP
 http://www.youtube.com/user/22Soto22?feature=mhum I-INTJ
 ( O
 my B-NP
