@@ -142,7 +142,7 @@ for folder in folders:
     sn_train = os.path.join(folder, "part5.sentiment")
     en_test = os.path.join(folder, "part5.entity.test.out")
     sn_test = os.path.join(folder, "part5.sentiment.test.out")
-    output_file = os.path.join(folder, "part5.test.out")
+    output_file = os.path.join(folder, "dev.p5.out")
 
     split_entity(train_file, out_filename=en_train)
     en_hmm = HMM(entity_states)
