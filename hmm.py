@@ -65,7 +65,7 @@ class HMM:
         else:
             raise Exception("Wrong decoding type")
         # Write result to output file
-        with open(out_filename, "w") as out_file:
+        with open(out_filename, "w", encoding="utf8") as out_file:
             for pred_deque in predictions:
                 while pred_deque:
                     word, state = pred_deque.popleft()
@@ -358,7 +358,7 @@ class HMM:
         """
         if data_type.lower() not in ["train", "test"]:
             raise Exception("Invalid data type given")
-        with open(filename, "r") as data_file:
+        with open(filename, "r", encoding="utf-8") as data_file:
             sentences = data_file.read().rstrip().split("\n\n")
             data = []
             for sentence in sentences:
