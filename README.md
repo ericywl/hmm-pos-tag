@@ -20,3 +20,5 @@ following:
 2. Predict the tags for `dev.in` file
 3. Output the above prediction to `dev.test.out` file
 4. Evaluate the prediction using the gold standard file `dev.out`
+
+The same applies for `hmm2.py` which uses a second-order Hidden Markov Model.
